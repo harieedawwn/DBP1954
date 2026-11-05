@@ -764,6 +764,9 @@ G.Enemies = {
       for (const e of list) scene.remove(e.group);
       list = pickSpawns().map(makeEnemy);
       total = list.length;
+      // stalkers: close in, run and gun, creep up when the player looks away
+      const cand = list.filter(e => e.tier < 3).sort(() => rng() - .5);
+      for (let i = 0; i < Math.min(diff.stalkers || 0, cand.length); i++) cand[i].stalker = true;
     }
 
     /* ---- weapon / IK pose ---- */
@@ -884,19 +887,20 @@ G.Enemies = {
 
     /* ---- movement ---- */
     function pickMove(e, goal, mode, targetPos) {
-      const leash = LEASH[e.tier];
+      const leash = e.stalker ? 999 : LEASH[e.tier];
       if (leash <= 0) return false;
       const gy0 = e.pos.y;
       let best = null, bs = -1e9;
       const ga = goal ? Math.atan2(goal.z - e.pos.z, goal.x - e.pos.x) : 0;
-      for (let k = 0; k < 9; k++) {
+      const tries = e.stalker ? 16 : 9, maxDy = e.stalker ? 2.4 : 1.2;
+      for (let k = 0; k < tries; k++) {
         const ang = mode === 'advance' ? ga + (rng() - .5) * 2.2 : rng() * TAU;
         const r = 2.5 + rng() * 4.5;
         const cx = e.pos.x + Math.cos(ang) * r, cz = e.pos.z + Math.sin(ang) * r;
         const hx = cx - e.home.x, hz = cz - e.home.z;
         if (hx * hx + hz * hz > leash * leash) continue;
         const gy = groundAt(cx, cz);
-        if (Math.abs(gy - gy0) > 1.2) continue;
+        if (Math.abs(gy - gy0) > maxDy) continue;
         if (!circleFree(cx, cz, gy, R_BODY + .12)) continue;
         if (!segFree(e.pos.x, e.pos.z, cx, cz, gy0, R_BODY + .05)) continue;
         let s = rng();
@@ -920,6 +924,7 @@ G.Enemies = {
       const mt = e.moveTarget, p = e.pos;
       const dx = mt.x - p.x, dz = mt.z - p.z, d = Math.hypot(dx, dz);
       if (d < .3) { e.moveTarget = null; return; }
+      if (e.stalker && Math.hypot(p.x - e.lastKnown.x, p.z - e.lastKnown.z) < 2.6) { e.moveTarget = null; return; }   // never walk into the player
       const s = Math.min(e.moveSpeed, d / dt);
       p.x += dx / d * s * dt; p.z += dz / d * s * dt;
       resolve(e);
@@ -943,6 +948,8 @@ G.Enemies = {
       p *= Math.pow(.88, Math.min(e.burstIdx || 0, 5)); // muzzle climb in a burst
       if (e.speed > .6) p *= .6;
       if (e.flinch > .2) p *= .5;
+      p *= 1 - .55 * clamp((d - 35) / 45, 0, 1);       // long range: mostly suppression
+      p *= e.accMul || 1;
       if (e.crouch > .3) p *= .9;
       return clamp(p, .02, .92);
     }
@@ -989,6 +996,8 @@ G.Enemies = {
       if (e.lookTimer <= 0) { e.lookTimer = 2 + rng() * 4; e.lookT = (rng() - .5) * 1.3; }
       e.headYaw = damp(e.headYaw, e.lookT, 2, dt);
       if (!e.moveTarget) e.yawT = e.homeYaw + e.lookT * .35;
+      e.patrolT = (e.patrolT == null ? 4 + rng() * 10 : e.patrolT) - dt;
+      if (e.patrolT <= 0 && !e.moveTarget) { e.patrolT = 6 + rng() * 12; e.moveSpeed = WALK * .55; pickMove(e, null, 'wander', null); }
       if (e.see && (e.inCone || e.dist < 8)) { e.moveTarget = null; alertEnemy(e, player.pos, 0); }
     }
     function logicAlert(e, dt, player) {
@@ -996,6 +1005,7 @@ G.Enemies = {
       e.aimT = .75; e.crouchT = 0; e.headYaw = damp(e.headYaw, 0, 3, dt);
       if (!e.moveTarget) facePoint(e, e.lastKnown.x, e.lastKnown.z);
       if (e.wake > 0) { e.wake -= dt; return; }
+      if (e.stalker) { e.state = ENGAGE; e.sub = 'stalk'; e.shots = 0; e.moveTarget = null; e.timeSinceSeen = 0; return; }
       if (e.see && (e.inCone || e.dist < 8)) { enterEngage(e, player, false); return; }
       e.advT -= dt;
       if (e.tier < 3 && !e.moveTarget && e.advT <= 0 && e.alertT > 1) {
@@ -1014,7 +1024,8 @@ G.Enemies = {
       const hd = Math.max(1, Math.hypot(player.pos.x - e.pos.x, player.pos.z - e.pos.z));
       e.pitch = damp(e.pitch, clamp(Math.atan2(player.pos.y - .25 - _v4.y, hd), -.5, .5), 6, dt);
       e.relocT -= dt; e.advT -= dt;
-      if (e.moveTarget) { e.aimT = .55; e.crouchT = .12; return; }
+      if (e.stalker) { logicStalk(e, dt, player); return; }
+      if (e.moveTarget) { e.aimT = .5; e.crouchT = .45; return; }   // crouched dash between cover
       facePoint(e, player.pos.x, player.pos.z);
       if (e.sub === 'move') { e.sub = 'cool'; e.t = .3 + rng() * .4; }
       // lost the player: advance to last known position, give up after a while
@@ -1050,7 +1061,7 @@ G.Enemies = {
           }
           if (e.burstLeft <= 0) {
             const base = e.kind === 'smg' ? (.9 + rng() * 1.4) * (1.45 - acc * .7) : .15 + rng() * .6;
-            e.t = Math.max(base, e.shotTimer);
+            e.t = Math.max(base, e.shotTimer) * (1 + 2.2 * clamp(((e.dist || 0) - 35) / 45, 0, 1));
             e.sub = e.hasCover ? 'hide' : 'cool';
           }
           break;
@@ -1069,6 +1080,42 @@ G.Enemies = {
           break;
         default: startBurst(e);
       }
+    }
+
+    function logicStalk(e, dt, player) {
+      const tp = player.pos, dx = e.pos.x - tp.x, dz = e.pos.z - tp.z, d = Math.hypot(dx, dz) || .01;
+      const vy = player.yaw || 0, fx = -Math.sin(vy), fz = -Math.cos(vy);
+      const looked = e.see && (dx * fx + dz * fz) / d > .82;          // inside the player's central view
+      e.lastKnown.copy(tp);
+      muzzle(e, _v4);
+      e.pitch = damp(e.pitch, clamp(Math.atan2(tp.y - .25 - _v4.y, Math.max(1, d)), -.5, .5), 6, dt);
+      e.accMul = 1;
+      if (e.sub === 'startle') {                       // caught: freezes, flinches, then commits
+        e.t -= dt; e.moveTarget = null; e.aimT = .35; e.crouchT = .25; facePoint(e, tp.x, tp.z);
+        if (e.t <= 0) { e.sub = 'assault'; e.burstLeft = e.kind === 'smg' ? 5 : 2; e.shotTimer = .1; }
+        return;
+      }
+      if (e.sub === 'assault') {                       // close-range ambush
+        e.moveTarget = null; e.aimT = 1; e.crouchT = 0; facePoint(e, tp.x, tp.z); e.accMul = 1.7;
+        if (e.burstLeft > 0 && e.aim > .8 && e.canFire && e.shotTimer <= 0) { fire(e, player); e.burstLeft--; e.shotTimer = e.kind === 'smg' ? .11 : .9; }
+        if (e.burstLeft <= 0 && e.shotTimer <= 0) { e.sub = 'stalk'; e.startled = false; e.calmT = 2; }
+        return;
+      }
+      e.sub = 'stalk';
+      e.calmT = Math.max(0, (e.calmT || 0) - dt);
+      if (looked && d < 24 && !e.startled && e.calmT <= 0) {
+        e.startled = true; e.sub = 'startle'; e.t = .7 + rng() * .5; e.flinch = 1; e.flinchDir = rng() < .5 ? -1 : 1; return;
+      }
+      if (!looked && d < 5 && e.calmT <= 0) { e.startled = true; e.sub = 'assault'; e.burstLeft = e.kind === 'smg' ? 4 : 1; e.shotTimer = .5; return; }
+      if (looked && d >= 24) {                          // seen from afar: run and gun toward the player
+        e.aimT = .8; e.crouchT = .3; e.accMul = .6;
+        if (e.canFire && e.shotTimer <= 0 && e.aim > .6) { fire(e, player); e.shotTimer = 1 + rng() * 1.2; }
+        if (!e.moveTarget) { e.moveSpeed = RUN; if (!pickMove(e, tp, 'advance', null)) pickMove(e, null, 'wander', null); }
+        return;
+      }
+      // unseen: creep in low
+      e.aimT = .45; e.crouchT = .55;
+      if (!e.moveTarget && d > 3) { e.moveSpeed = WALK * .95; if (!pickMove(e, tp, 'advance', null)) pickMove(e, null, 'wander', null); }
     }
 
     function updateEnemy(e, dt, player) {

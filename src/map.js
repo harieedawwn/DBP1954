@@ -464,6 +464,7 @@ G.Map = (function () {
     const h0 = groundHeightAt(x - Math.sin(yaw) * len / 2, z - Math.cos(yaw) * len / 2), h1 = groundHeightAt(x + Math.sin(yaw) * len / 2, z + Math.cos(yaw) * len / 2);
     const y0 = Math.max(h0, h1) + r * 0.7;
     addCyl('bark', x, y0, z, r, r * 0.85, len, 8, { rx: Math.PI / 2, ry: yaw + Math.PI, tile: 1, t: 0.9, caps: true });
+    for (let k = -2; k <= 2; k++) { const px = x + Math.sin(yaw) * len * k / 5, pz = z + Math.cos(yaw) * len * k / 5; box3(px - r - 0.1, y0 - r - 0.3, pz - r - 0.1, px + r + 0.1, y0 + r, pz + r + 0.1); }
   }
   function tarpShelter(x, z, yaw) {
     const cy = Math.cos(yaw), sy = Math.sin(yaw), y0 = groundHeightAt(x, z);
@@ -483,6 +484,9 @@ G.Map = (function () {
     addBox('plank', x + 0.1, y + 0.7, z + 0.05, 0.8, 0.44, 0.5, { ry: yaw + 0.4, tile: 0.9, t: [0.58, 0.68, 0.48] });
     addBox('plank', x - 0.9 * Math.cos(yaw), y + 0.22, z + 0.9 * Math.sin(yaw), 0.7, 0.42, 0.45, { ry: yaw - 0.3, tile: 0.9, t: [0.66, 0.74, 0.54] });
     addBox('tarp', x + 0.5, y + 0.1, z - 0.7, 0.7, 0.2, 0.5, { ry: 0.2, tile: 0.9, t: 0.85 });
+    box3(x - 0.65, y, z - 0.65, x + 0.65, y + 0.95, z + 0.65);
+    const cx2 = x - 0.9 * Math.cos(yaw), cz2 = z + 0.9 * Math.sin(yaw);
+    box3(cx2 - 0.45, y, cz2 - 0.45, cx2 + 0.45, y + 0.45, cz2 + 0.45);
   }
   function buildWire(w) {
     const runs = []; let a = w.x0;

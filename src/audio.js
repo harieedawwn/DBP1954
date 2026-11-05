@@ -104,7 +104,7 @@ window.G = window.G || {};
     wetIn = ctx.createGain();
     const conv = ctx.createConvolver();
     conv.buffer = makeIR(ctx);
-    const wetOut = ctx.createGain(); wetOut.gain.value = 1.7;
+    const wetOut = ctx.createGain(); wetOut.gain.value = 0.9;
     wetIn.connect(conv); conv.connect(wetOut); wetOut.connect(inBus);
 
     noiseBuf = makeNoise(ctx);
@@ -201,24 +201,23 @@ window.G = window.G || {};
   const S = {};
 
   S.player_shot = (o, t) => {
-    const v = voice(Object.assign({ volume: 1.25 }, o), 1.15, null), d = v.in, vs = jit(1, 0.08);
+    const v = voice(Object.assign({ volume: 1.35 }, o), 0.38, null), d = v.in, vs = jit(1, 0.08);
     // 1) crack: sharp noise transient
     nz(d, t, { type: 'highpass', f: jit(1700, 0.2), q: 0.5, peak: 1.0 * vs, att: 0.0006, dec: jit(0.05, 0.2) });
     nz(d, t, { type: 'bandpass', f: jit(3600, 0.15), q: 0.8, peak: 0.6 * vs, att: 0.0005, dec: 0.03 });
     // 2) body thump 60-150 Hz (+ low noise body)
     const f = rnd(62, 140);
-    tone(d, t, { f, peak: 0.95 * vs, att: 0.002, dec: jit(0.16, 0.2) });
+    tone(d, t, { f, peak: 1.1 * vs, att: 0.002, dec: jit(0.16, 0.2) });
+    tone(d, t, { f: rnd(42, 55), peak: 1.0 * vs, att: 0.003, dec: 0.22 });   // sub punch: the 'boom'
     tone(d, t, { f: f * 2.01, peak: 0.35, att: 0.002, dec: 0.08 });
-    nz(d, t, { type: 'lowpass', f: jit(520, 0.2), q: 0.7, peak: 0.9, att: 0.001, dec: jit(0.16, 0.2) });
+    nz(d, t, { type: 'lowpass', f: jit(420, 0.2), q: 0.9, peak: 1.2, att: 0.001, dec: jit(0.13, 0.2) });
     // 3) mechanical action: bolt slam + spring/metal tick
     const m = t + jit(0.012, 0.3);
     nz(d, m, { type: 'bandpass', f: jit(1200, 0.2), q: 2.2, peak: 0.32, att: 0.001, dec: 0.035 });
     nz(d, m + 0.006, { type: 'bandpass', f: jit(2900, 0.2), q: 3, peak: 0.2, att: 0.0008, dec: 0.02 });
     tone(d, m, { f: jit(1650, 0.1), peak: 0.07, att: 0.001, dec: 0.05 });
     // 4) tail: convolution reverb (wet send) + explicit slap-back
-    echo(v, rnd(0.15, 0.25), rnd(0.32, 0.42), 2600);   // near slope
-    echo(v, rnd(0.45, 0.7), rnd(0.2, 0.28), 1500);     // far hills
-    echo(v, rnd(0.9, 1.3), rnd(0.1, 0.15), 900);       // valley rumble
+    echo(v, rnd(0.22, 0.32), rnd(0.12, 0.16), 1800);   // one short slap off the slope
   };
 
   S.enemy_shot = (o, t) => {

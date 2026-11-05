@@ -3,9 +3,9 @@ window.G = window.G || {};
 // Tuning values for the whole game. Units: meters, seconds, radians.
 G.CFG = {
   difficulty: {
-    easy:   { label: 'Dễ',     enemyCount: 12, enemyAccuracy: 0.25, reactionTime: 0.90, enemyDamage: 7,  playerHealth: 100 },
-    normal: { label: 'Thường', enemyCount: 16, enemyAccuracy: 0.40, reactionTime: 0.60, enemyDamage: 10, playerHealth: 100 },
-    hard:   { label: 'Khó',    enemyCount: 20, enemyAccuracy: 0.55, reactionTime: 0.40, enemyDamage: 14, playerHealth: 100 }
+    easy:   { label: 'Dễ',     enemyCount: 8,  stalkers: 3, enemyAccuracy: 0.20, reactionTime: 0.90, enemyDamage: 7,  playerHealth: 100 },
+    normal: { label: 'Thường', enemyCount: 13, stalkers: 2, enemyAccuracy: 0.40, reactionTime: 0.60, enemyDamage: 10, playerHealth: 100 },
+    hard:   { label: 'Khó',    enemyCount: 18, stalkers: 2, enemyAccuracy: 0.55, reactionTime: 0.40, enemyDamage: 14, playerHealth: 100 }
   },
   difficultyOrder: ['easy', 'normal', 'hard'],
   defaultDifficulty: 'normal',

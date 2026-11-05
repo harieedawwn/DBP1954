@@ -871,7 +871,21 @@ window.G = window.G || {};
     updateHUD(dt);
   }
 
+  // short, diegetic-style hints: shown once per run, only when relevant
+  function hints() {
+    const H = run.hints || (run.hints = {});
+    const once = (k, cond, text, secs) => { if (!H[k] && cond) { H[k] = 1; toast(text, secs || 5); } };
+    const a = weapon.ammo();
+    once('move', run.t > 1.5, 'W A S D di chuyển  ·  Shift chạy  ·  Chuột phải ngắm', 5);
+    once('cover', run.t > 9, 'Địch nấp trong giao thông hào phía bắc. Ctrl để cúi thấp.', 5);
+    once('hurt', player.health < player.maxHealth * 0.7, 'Tìm chỗ nấp. Không trúng đạn một lúc sẽ hồi sức.', 4);
+    once('reload', a.mag <= 6 && !a.reloading, 'R: nạp đạn', 3);
+    once('crate', a.reserve <= 40, 'Thiếu đạn: tìm hòm đạn ở các lán, đến gần nhấn E.', 5);
+    once('back', run.t > 25, 'Cẩn thận phía sau: có địch luồn lách áp sát.', 4);
+  }
+
   function updateInteractions(dt) {
+    if (run.toastT <= 0) hints();
     const alive = enemies.aliveCount();
     if (alive === 0 && !run.cleared) {
       run.cleared = true;
@@ -943,7 +957,10 @@ window.G = window.G || {};
       run.lastObjState = os;
       setText(ui.objTitle, run.cleared ? 'Kéo cờ lên mái hầm chỉ huy' : 'Tiêu diệt toàn bộ quân địch');
     }
-    setText(ui.objLine, 'Địch còn lại: ' + alive + ' / ' + total);
+    if (run.cleared) {
+      const o = map.objective.pos, dist = Math.round(Math.hypot(o.x - player.feet.x, o.z - player.feet.z));
+      setText(ui.objLine, 'Hầm chỉ huy: ' + dist + ' m về phía bắc');
+    } else setText(ui.objLine, 'Địch còn lại: ' + alive + ' / ' + total);
 
     // prompt + hold bar
     const ptxt = run.prompt || '';
