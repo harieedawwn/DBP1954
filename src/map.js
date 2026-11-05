@@ -722,7 +722,7 @@ G.Map = (function () {
     const tex = n => G.Tex.get(n);
 
     // lights, fog, sky
-    scene.fog = new T.FogExp2(0xd6c6a6, 0.0058);
+    scene.fog = new T.FogExp2(0xd6c6a6, 0.0042);
     scene.background = skyTex();
     const hemi = new T.HemisphereLight(0xbcd0ea, 0x7a5c3c, 1.35); scene.add(hemi);
     const sun = new T.DirectionalLight(0xffe2b4, 2.5);

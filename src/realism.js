@@ -124,9 +124,10 @@ window.G = window.G || {};
       'void main(){',
       ' vec3 c = texture2D(tDiffuse, vUv).rgb;',          // display-referred (after ACES + sRGB)
       ' float l = dot(c, vec3(0.299,0.587,0.114));',
-      ' c = mix(vec3(l), c, 0.70 - uHurt*0.35);',          // muted, war-film palette
-      ' c *= vec3(1.03, 1.0, 0.92);',                       // warm dust
-      ' c = mix(c, c*c*(3.0-2.0*c), 0.22);',                // gentle S-curve
+      ' c = mix(vec3(l), c, 0.72 - uHurt*0.35);',          // muted, war-film palette
+      ' c += (1.0-l) * vec3(-0.012, 0.004, 0.020);',        // cool, slightly teal shadows
+      ' c *= mix(vec3(1.0), vec3(1.06, 1.0, 0.88), l);',    // warm amber highlights
+      ' c = mix(c, c*c*(3.0-2.0*c), 0.38);',                // filmic contrast
       ' c = c*0.96 + vec3(0.025,0.022,0.015);',             // lifted, hazy blacks
       ' vec2 q = vUv - 0.5; q.x *= uRes.x/uRes.y;',
       ' c *= mix(1.0, smoothstep(0.95, 0.25, length(q)), 0.38);',  // lens vignette
@@ -136,11 +137,12 @@ window.G = window.G || {};
       '}'].join('\n')
   };
 
-  function createComposer(renderer) {
+  function createComposer(renderer, opts) {
+    opts = opts || {};
     if (!A.EffectComposer) return null;
     const size = renderer.getSize(new T.Vector2());
     const pr = renderer.getPixelRatio();
-    const rt = new T.WebGLRenderTarget(size.x * pr, size.y * pr, { type: T.HalfFloatType, samples: renderer.capabilities.isWebGL2 ? 4 : 0 });
+    const rt = new T.WebGLRenderTarget(size.x * pr, size.y * pr, { type: T.HalfFloatType, samples: renderer.capabilities.isWebGL2 ? (opts.msaa == null ? 4 : opts.msaa) : 0 });
     const composer = new A.EffectComposer(renderer, rt);
     const worldPass = new A.RenderPass(new T.Scene(), new T.PerspectiveCamera());
     const viewPass = new A.RenderPass(new T.Scene(), new T.PerspectiveCamera());

@@ -517,9 +517,9 @@ function makeRig(geo, mat, kind) {
   mesh.castShadow = true;
   // faint red rim so enemies read against the earth (inverted hull, shares the skeleton)
   if (!outlineMat) {
-    outlineMat = new T.MeshBasicMaterial({ color: 0xc81e14, side: T.BackSide, transparent: true, opacity: .55, depthWrite: false, fog: false });
+    outlineMat = new T.MeshBasicMaterial({ color: 0xe0281a, side: T.BackSide, transparent: true, opacity: .8, depthWrite: false, fog: false });
     outlineMat.onBeforeCompile = sh => {
-      sh.vertexShader = sh.vertexShader.replace('#include <skinning_vertex>', '#include <skinning_vertex>\n transformed += normalize(objectNormal) * 0.022;');
+      sh.vertexShader = sh.vertexShader.replace('#include <skinning_vertex>', '#include <skinning_vertex>\n { float dd = length((modelViewMatrix * vec4(transformed, 1.0)).xyz); transformed += normalize(objectNormal) * (0.02 + dd * 0.0022); }');
     };
   }
   const outline = new T.SkinnedMesh(geo, outlineMat);
@@ -777,7 +777,7 @@ G.Enemies = {
       const a = Math.acos(clamp((L1 * L1 + hh * hh - L2 * L2) / (2 * L1 * hh), -1, 1));
       const bb = Math.asin(clamp(L1 * Math.sin(a) / L2, -1, 1));
       const amp = (.34 + .34 * run) * mv * (1 - .75 * c);
-      bn[B.hips].position.set(.012 * Math.sin(ph) * mv, REST[0][1] - drop - .03 * mv * Math.abs(Math.sin(ph)) * (1 - c), 0);
+      bn[B.hips].position.set(.025 * Math.sin(ph) * mv, REST[0][1] - drop - .045 * mv * Math.abs(Math.sin(ph)) * (1 - c), 0);
       for (let s = 0; s < 2; s++) {
         const p2 = ph + s * Math.PI;
         const th = a + amp * Math.sin(p2);
@@ -794,7 +794,9 @@ G.Enemies = {
       // weapon pose (torso space)
       const w = smooth(aim);
       let px = lerp(-.03, -.05, w), py = lerp(-.07, .12, w), pz = lerp(-.10, .02, w);
-      py += (1 - w) * .015 * Math.sin(ph * 2) * mv;
+      const free = (1 - w) * mv;                       // walking at low-ready: rifle rides the gait
+      py += .035 * Math.sin(ph * 2) * free;
+      px += .025 * Math.sin(ph) * free;
       pz += .06 * e.recoil;
       let wrx = lerp(-.75, e.pitch * .55, w) + .10 * e.recoil, wry = lerp(.12, .30, w), wrz = 0;
       if (e.boltT >= 0) wrz = -.7 * Math.sin(clamp((e.boltT - .12) / .7, 0, 1) * Math.PI);
@@ -809,6 +811,13 @@ G.Enemies = {
       _G.set(gp.L[0], gp.L[1], gp.L[2]).applyQuaternion(wq);
       solveArm(_qa, _qb, -.21, W0[0] + px + _G.x, W0[1] + py + _G.y, W0[2] + pz + _G.z, poleL[0], poleL[1], poleL[2]);
       bn[B.uArmL].quaternion.copy(_qa); bn[B.lArmL].quaternion.copy(_qb);
+      if (free > .05) {                                 // left hand lets go and swings opposite the left leg
+        const sw = Math.sin(ph + Math.PI) * (.45 + .35 * run);
+        _q2.setFromEuler(_eul.set(sw, 0, .1, 'XYZ'));
+        bn[B.uArmL].quaternion.slerp(_q2, free * .9);
+        _q2.setFromEuler(_eul.set(.35 + .25 * Math.max(0, sw), 0, 0, 'XYZ'));
+        bn[B.lArmL].quaternion.slerp(_q2, free * .9);
+      }
       wbone.position.set(W0[0] + px, W0[1] + py, W0[2] + pz);
       wbone.quaternion.copy(wq);
       // death: arms go limp, rifle drops, body tips over

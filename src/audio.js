@@ -104,7 +104,7 @@ window.G = window.G || {};
     wetIn = ctx.createGain();
     const conv = ctx.createConvolver();
     conv.buffer = makeIR(ctx);
-    const wetOut = ctx.createGain(); wetOut.gain.value = 1.2;
+    const wetOut = ctx.createGain(); wetOut.gain.value = 1.7;
     wetIn.connect(conv); conv.connect(wetOut); wetOut.connect(inBus);
 
     noiseBuf = makeNoise(ctx);
@@ -201,7 +201,7 @@ window.G = window.G || {};
   const S = {};
 
   S.player_shot = (o, t) => {
-    const v = voice(o, 0.75, null), d = v.in, vs = jit(1, 0.08);
+    const v = voice(Object.assign({ volume: 1.25 }, o), 1.15, null), d = v.in, vs = jit(1, 0.08);
     // 1) crack: sharp noise transient
     nz(d, t, { type: 'highpass', f: jit(1700, 0.2), q: 0.5, peak: 1.0 * vs, att: 0.0006, dec: jit(0.05, 0.2) });
     nz(d, t, { type: 'bandpass', f: jit(3600, 0.15), q: 0.8, peak: 0.6 * vs, att: 0.0005, dec: 0.03 });
@@ -216,7 +216,9 @@ window.G = window.G || {};
     nz(d, m + 0.006, { type: 'bandpass', f: jit(2900, 0.2), q: 3, peak: 0.2, att: 0.0008, dec: 0.02 });
     tone(d, m, { f: jit(1650, 0.1), peak: 0.07, att: 0.001, dec: 0.05 });
     // 4) tail: convolution reverb (wet send) + explicit slap-back
-    echo(v, rnd(0.15, 0.38), rnd(0.18, 0.3), 2600);
+    echo(v, rnd(0.15, 0.25), rnd(0.32, 0.42), 2600);   // near slope
+    echo(v, rnd(0.45, 0.7), rnd(0.2, 0.28), 1500);     // far hills
+    echo(v, rnd(0.9, 1.3), rnd(0.1, 0.15), 900);       // valley rumble
   };
 
   S.enemy_shot = (o, t) => {
@@ -299,16 +301,17 @@ window.G = window.G || {};
 
   S.bullet_whiz = (o, t) => {                  // supersonic crack-by, fixed bands, amplitude envelope only
     const v = voice(o, 0.05, null), d = v.in;
-    nz(d, t, { type: 'bandpass', f: jit(3000, 0.12), q: 1.4, peak: 0.55, att: 0.03, dec: 0.13 });
-    nz(d, t + 0.01, { type: 'bandpass', f: jit(4800, 0.12), q: 2, peak: 0.25, att: 0.02, dec: 0.08 });
-    nz(d, t + 0.02, { type: 'highpass', f: 5000, q: 0.5, peak: 0.12, att: 0.002, dec: 0.015 });
+    // a near miss is a sharp snap (sonic boom N-wave), not a hiss
+    nz(d, t, { type: 'highpass', f: jit(1800, 0.15), q: 0.6, peak: 0.9, att: 0.0004, dec: 0.012 });
+    nz(d, t, { type: 'bandpass', f: jit(900, 0.15), q: 0.8, peak: 0.35, att: 0.0006, dec: 0.03 });
+    tone(d, t, { f: jit(140, 0.1), peak: 0.18, att: 0.001, dec: 0.04 });
   };
 
   S.footstep = (o, t) => {
     const v = voice(o, 0.05, null), d = v.in;
     nz(d, t, { type: 'lowpass', f: jit(380, 0.25), q: 0.7, peak: 0.55, att: 0.004, dec: jit(0.09, 0.2) });
     tone(d, t, { f: jit(75, 0.15), peak: 0.35, att: 0.003, dec: 0.07 });
-    nz(d, t + 0.005, { type: 'highpass', f: 2200, q: 0.6, peak: 0.1, att: 0.002, dec: 0.05 });
+    nz(d, t + 0.005, { type: 'bandpass', f: 1400, q: 0.8, peak: 0.04, att: 0.002, dec: 0.04 });
   };
 
   S.hit_marker = (o, t) => {

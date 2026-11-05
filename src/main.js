@@ -248,6 +248,11 @@ window.G = window.G || {};
         }
       },
       {
+        label: () => 'Đồ họa',
+        value: () => GFX[gfx].label,
+        onAlt: (d) => cycleGfx(d)
+      },
+      {
         label: () => 'Âm lượng',
         value: () => String(Math.round(G.Audio.getVolume('master') * 10)),
         onAlt: (d) => G.Audio.setVolume('master', Math.round(G.Audio.getVolume('master') * 10 + d) / 10)
@@ -314,6 +319,11 @@ window.G = window.G || {};
     h('div', 'htitle cond', 'Tạm dừng', panel);
     makeMenu(scr, panel, [
       { label: () => 'Tiếp tục', onSelect: resumeGame },
+      {
+        label: () => 'Đồ họa',
+        value: () => GFX[gfx].label,
+        onAlt: (d) => cycleGfx(d)
+      },
       {
         label: () => 'Âm lượng',
         value: () => String(Math.round(G.Audio.getVolume('master') * 10)),
@@ -404,6 +414,7 @@ window.G = window.G || {};
     scene = new THREE.Scene();
     map = G.Map.build(scene);
     colliders = map.colliders || [];
+    if (map.sun) { const sz = GFX[gfx].size; map.sun.shadow.mapSize.set(sz, sz); }
     if (G.Realism) { try { G.Realism.prepareWorld(scene, renderer); } catch (e) { report('realism world', e); } }
     worldDirty = false;
   }
@@ -1000,9 +1011,42 @@ window.G = window.G || {};
   }
 
   // ---------------------------------------------------------------- render + loop
-  let shadowT = 0, composer = null, lastDt = 0.016;
+  let shadowT = 0, composer = null, lastDt = 0.016, frameN = 0;
+  const GFX = {
+    low:    { label: 'Thấp',       pr: 0.75, post: false, msaa: 0, shadows: false, size: 1024 },
+    medium: { label: 'Trung bình', pr: 1.0,  post: true,  msaa: 0, shadows: true,  size: 1024 },
+    high:   { label: 'Cao',        pr: 1.25, post: true,  msaa: 4, shadows: true,  size: 2048 }
+  };
+  const GFX_ORDER = ['low', 'medium', 'high'];
+  let gfx = 'medium';
+  try { const g = localStorage.getItem('dbp_gfx'); if (GFX[g]) gfx = g; } catch (e) { /* storage off */ }
+  if (/[?&]low\b/.test(location.search)) gfx = 'low';
+  function applyGfx(changed) {
+    if (!renderer) return;
+    const q = GFX[gfx];
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, q.pr));
+    const shadowsChanged = renderer.shadowMap.enabled !== q.shadows;
+    renderer.shadowMap.enabled = q.shadows;
+    renderer.shadowMap.type = gfx === 'high' ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
+    renderer.shadowMap.autoUpdate = gfx === 'high';
+    if (map && map.sun && map.sun.shadow.mapSize.x !== q.size) {
+      map.sun.shadow.mapSize.set(q.size, q.size);
+      if (map.sun.shadow.map) { map.sun.shadow.map.dispose(); map.sun.shadow.map = null; }
+    }
+    if (changed && scene && shadowsChanged) scene.traverse(o => { if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => { m.needsUpdate = true; }); });
+    composer = null;
+    if (q.post && G.Realism) { try { composer = G.Realism.createComposer(renderer, { msaa: q.msaa }); } catch (e) { report('composer', e); composer = null; } }
+    onResize();
+  }
+  function cycleGfx(d) {
+    gfx = GFX_ORDER[(GFX_ORDER.indexOf(gfx) + d + GFX_ORDER.length) % GFX_ORDER.length];
+    try { localStorage.setItem('dbp_gfx', gfx); } catch (e) { /* storage off */ }
+    applyGfx(true);
+  }
   function render() {
     if (!scene) return;
+    frameN++;
+    if (!renderer.shadowMap.autoUpdate) renderer.shadowMap.needsUpdate = (frameN & 1) === 0;   // shadows every other frame
     if (composer) {
       const inGameC = (S.state === 'play' || S.state === 'paused') && weapon && viewScene && player.alive;
       composer.render(scene, camera, inGameC ? viewScene : null, inGameC ? weapon.viewCamera : null, lastDt, run ? run.dmgFlash : 0);
@@ -1158,11 +1202,7 @@ window.G = window.G || {};
 
     camera = new THREE.PerspectiveCamera(P.fov, window.innerWidth / window.innerHeight, 0.05, 600);
     camera.rotation.order = 'YXZ';
-    const low = /[?&]low\b/.test(location.search);
-    if (low) renderer.setPixelRatio(1);
-    if (G.Realism && !low) renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.25));
-    if (G.Realism && !low) { try { composer = G.Realism.createComposer(renderer); } catch (e) { report('composer', e); composer = null; } }
-    onResize();
+    applyGfx(false);
 
     try { G.Audio.init(); } catch (e) { report('audio init', e); }
 
