@@ -8,6 +8,9 @@ window.G = window.G || {};
 (function () {
   'use strict';
 
+  const vol = { master: 1, ambience: 0.35 };
+  let masterGain = null, ambBus = null;
+  try { const v = JSON.parse(localStorage.getItem('dbp_volume') || 'null'); if (v) Object.assign(vol, v); } catch (e) { /* storage off */ }
   let ctx = null, inBus = null, wetIn = null, noiseBuf = null, windBuf = null;
   const lis = { x: 0, y: 0, z: 0 };
   const loops = {};
@@ -92,7 +95,9 @@ window.G = window.G || {};
     const curve = new Float32Array(1024);
     for (let i = 0; i < 1024; i++) { const x = i / 511.5 - 1; curve[i] = Math.tanh(x * 1.3) / Math.tanh(1.3) * 0.98; }
     sat.curve = curve; sat.oversample = '2x';
-    const master = ctx.createGain(); master.gain.value = 0.9;
+    const master = ctx.createGain(); master.gain.value = 0.9 * vol.master;
+    masterGain = master;
+    ambBus = ctx.createGain(); ambBus.gain.value = vol.ambience; ambBus.connect(inBus);
     inBus.connect(comp); comp.connect(makeup); makeup.connect(lim); lim.connect(sat); sat.connect(master);
     master.connect(ctx.destination);
 
@@ -379,7 +384,7 @@ window.G = window.G || {};
         const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 110;
         const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 900;
         const g = ctx.createGain(); g.gain.setValueAtTime(0.0001, now); g.gain.linearRampToValueAtTime(0.5, now + 2.5);
-        src.connect(hp); hp.connect(lp); lp.connect(g); g.connect(inBus);
+        src.connect(hp); hp.connect(lp); lp.connect(g); g.connect(ambBus);
         src.start(now, Math.random() * 5);
         loops[name] = { src, g, off: false };
       } else if (L) {
@@ -394,6 +399,16 @@ window.G = window.G || {};
     }
   }
 
-  G.Audio = { init, unlock, updateListener, play, loop, names: NAMES, strict: false,
+  function setVolume(ch, v) {
+    vol[ch] = Math.max(0, Math.min(1, v));
+    try { localStorage.setItem('dbp_volume', JSON.stringify(vol)); } catch (e) { /* storage off */ }
+    if (ctx && masterGain && ambBus) {
+      const t = ctx.currentTime;
+      masterGain.gain.setTargetAtTime(0.9 * vol.master, t, 0.03);
+      ambBus.gain.setTargetAtTime(vol.ambience, t, 0.03);
+    }
+  }
+  function getVolume(ch) { return vol[ch]; }
+  G.Audio = { setVolume, getVolume, init, unlock, updateListener, play, loop, names: NAMES, strict: false,
     context: () => ctx };
 })();

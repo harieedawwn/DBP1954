@@ -5,6 +5,9 @@
 <title>Điện Biên Phủ 1954</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600&family=Roboto+Condensed:wght@400;500&display=swap&subset=vietnamese">
 <link rel="stylesheet" href="css/style.css">
 <script type="importmap">{ "imports": { "three": "./vendor/three.module.min.js" } }</script>
 </head>
@@ -23,7 +26,7 @@ window.THREE_ADDONS = { EffectComposer, RenderPass, ShaderPass, OutputPass };
 
 // Game modules are plain scripts on the global G, loaded in this order.
 const MODULES = ['config', 'textures', 'map', 'audio', 'weapon', 'enemies', 'realism', 'main'];
-const V = '?v=1';
+const V = '?v=2';
 for (const name of MODULES) {
   await new Promise((ok, fail) => {
     const s = document.createElement('script');

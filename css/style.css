@@ -12,7 +12,7 @@ canvas#game { position: fixed; inset: 0; width: 100%; height: 100%; display: blo
 
 #ui {
   position: fixed; inset: 0; pointer-events: none; user-select: none; -webkit-user-select: none;
-  font-family: "Arial Narrow", Georgia, "Times New Roman", serif;
+  font-family: "Roboto Condensed", "Arial Narrow", Arial, sans-serif;
   color: var(--khaki);
   text-shadow: 1px 1px 0 #000, 0 0 6px rgba(0,0,0,.55);
 }
@@ -23,8 +23,8 @@ canvas#game { position: fixed; inset: 0; width: 100%; height: 100%; display: blo
 }
 .layer { position: absolute; inset: 0; pointer-events: none; }
 .cond {
-  font-family: Impact, "Haettenschweiler", "Arial Narrow Bold", "Arial Narrow", sans-serif;
-  letter-spacing: .06em; text-transform: uppercase; font-weight: normal;
+  font-family: "Oswald", "Roboto Condensed", "Arial Narrow", sans-serif;
+  letter-spacing: .05em; text-transform: uppercase; font-weight: 500;
 }
 
 /* ---------- panels */

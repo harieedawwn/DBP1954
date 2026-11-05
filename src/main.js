@@ -247,9 +247,19 @@ window.G = window.G || {};
           S.diff = o[(o.indexOf(S.diff) + d + o.length) % o.length];
         }
       },
+      {
+        label: () => 'Âm lượng',
+        value: () => String(Math.round(G.Audio.getVolume('master') * 10)),
+        onAlt: (d) => G.Audio.setVolume('master', Math.round(G.Audio.getVolume('master') * 10 + d) / 10)
+      },
+      {
+        label: () => 'Âm môi trường',
+        value: () => String(Math.round(G.Audio.getVolume('ambience') * 10)),
+        onAlt: (d) => G.Audio.setVolume('ambience', Math.round(G.Audio.getVolume('ambience') * 10 + d) / 10)
+      },
       { label: () => 'Điều khiển', onSelect: () => openControls('menu') }
     ]);
-    h('div', 'foot', '↑ ↓ chọn   ←  → đổi độ khó   Enter xác nhận', scr.root);
+    h('div', 'foot', '↑ ↓ chọn   ← → thay đổi   Enter xác nhận', scr.root);
   }
 
   function buildControlsScreen() {
@@ -304,6 +314,16 @@ window.G = window.G || {};
     h('div', 'htitle cond', 'Tạm dừng', panel);
     makeMenu(scr, panel, [
       { label: () => 'Tiếp tục', onSelect: resumeGame },
+      {
+        label: () => 'Âm lượng',
+        value: () => String(Math.round(G.Audio.getVolume('master') * 10)),
+        onAlt: (d) => G.Audio.setVolume('master', Math.round(G.Audio.getVolume('master') * 10 + d) / 10)
+      },
+      {
+        label: () => 'Âm môi trường',
+        value: () => String(Math.round(G.Audio.getVolume('ambience') * 10)),
+        onAlt: (d) => G.Audio.setVolume('ambience', Math.round(G.Audio.getVolume('ambience') * 10 + d) / 10)
+      },
       { label: () => 'Điều khiển', onSelect: () => openControls('pause') },
       { label: () => 'Về menu chính', onSelect: goMenu }
     ]);

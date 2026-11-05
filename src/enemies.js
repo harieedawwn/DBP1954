@@ -497,6 +497,7 @@ function getGeometry(kind, hat, rolled, pack) {
 
 /* ------------------------------------------------------------------ rig + vfx assets */
 let flashGeo = null, flashMat = null;
+let outlineMat = null;
 function makeRig(geo, mat, kind) {
   const bones = [];
   for (let i = 0; i < NB; i++) {
@@ -514,6 +515,18 @@ function makeRig(geo, mat, kind) {
   mesh.bind(new T.Skeleton(bones));
   mesh.frustumCulled = false;
   mesh.castShadow = true;
+  // faint red rim so enemies read against the earth (inverted hull, shares the skeleton)
+  if (!outlineMat) {
+    outlineMat = new T.MeshBasicMaterial({ color: 0xc81e14, side: T.BackSide, transparent: true, opacity: .55, depthWrite: false, fog: false });
+    outlineMat.onBeforeCompile = sh => {
+      sh.vertexShader = sh.vertexShader.replace('#include <skinning_vertex>', '#include <skinning_vertex>\n transformed += normalize(objectNormal) * 0.022;');
+    };
+  }
+  const outline = new T.SkinnedMesh(geo, outlineMat);
+  outline.bind(mesh.skeleton, mesh.bindMatrix);
+  outline.frustumCulled = false; outline.renderOrder = -1;
+  group.add(outline);
+  mesh.userData.outline = outline;
   if (!flashGeo) {
     const p = [], ix = [];
     // two crossed pyramids pointing forward (-z)
@@ -1099,6 +1112,7 @@ G.Enemies = {
 
     /* ---- public ---- */
     function kill(e, dir) {
+      if (e.mesh.userData.outline) e.mesh.userData.outline.visible = false;
       e.state = DEAD; e.dead = true; e.moveTarget = null; e.burstLeft = 0; e.shotTimer = 0; e.boltT = -1;
       e.flash = 0; e.flashMesh.visible = false; e.baseY = e.pos.y; e.deathP = 0; e.frozen = false;
       let sign = 1;                                   // +1 = fall backwards
