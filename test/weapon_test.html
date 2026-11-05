@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Weapon test — Type 50 SMG</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #1b1f17; font-family: Consolas, "Courier New", monospace; color: #e8dfae; }
+  canvas#view { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+  #hud { position: fixed; left: 12px; top: 10px; padding: 8px 12px; background: rgba(30,36,22,.72); border: 2px solid #6a6a40; border-style: outset; font-size: 13px; line-height: 1.5; white-space: pre; text-shadow: 1px 1px 0 #000; pointer-events: none; }
+  #help { position: fixed; left: 50%; top: 42%; transform: translate(-50%, -50%); padding: 16px 24px; background: rgba(30,36,22,.82); border: 2px solid #8a8a50; border-style: outset; text-align: center; font-size: 15px; line-height: 1.7; text-shadow: 1px 1px 0 #000; pointer-events: none; }
+  #cross { position: fixed; left: 50%; top: 50%; width: 4px; height: 4px; margin: -2px 0 0 -2px; background: rgba(240,230,160,.85); border-radius: 50%; pointer-events: none; }
+  #panel { position: fixed; right: 10px; top: 10px; width: 210px; padding: 8px; background: rgba(30,36,22,.8); border: 2px solid #6a6a40; border-style: outset; max-height: calc(100% - 40px); overflow-y: auto; }
+  #panel h3 { margin: 0 0 6px; font-size: 13px; color: #d8b45a; letter-spacing: 1px; text-transform: uppercase; }
+  #panel button { display: block; width: 100%; margin: 3px 0; padding: 4px 6px; background: #3b4228; color: #e8dfae; border: 2px outset #7a7a48; font: 12px Consolas, monospace; text-align: left; cursor: pointer; }
+  #panel button:hover { background: #4d5733; } #panel button:active { border-style: inset; }
+  #panel label { display: block; font-size: 12px; margin: 5px 0; }
+  #panel input[type=range] { width: 100%; }
+</style>
+</head>
+<body>
+<canvas id="view"></canvas>
+<div id="cross"></div>
+<div id="hud">loading…</div>
+<div id="help">Click to lock the mouse<br>LMB fire · RMB aim · R reload · WASD move · Shift sprint · Esc release</div>
+<div id="panel">
+  <h3>Sounds</h3>
+  <label><input type="checkbox" id="pos"> positional (left-front)</label>
+  <label>distance <span id="dv">40</span> m<input type="range" id="dist" min="5" max="250" value="40"></label>
+  <label><input type="checkbox" id="wind"> wind loop</label>
+  <div id="btns"></div>
+</div>
+
+<script type="module">
+import * as THREE from '../vendor/three.module.min.js';
+window.THREE = THREE;
+
+// classic module scripts, in SPEC order (this page only needs audio + weapon)
+for (const src of ['../src/audio.js', '../src/weapon.js']) {
+  await new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = () => rej(new Error('cannot load ' + src)); document.body.appendChild(s); });
+}
+const G = window.G;
+
+// ---------- renderer / scene ----------
+const canvas = document.getElementById('view');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+renderer.autoClear = false;
+renderer.shadowMap.enabled = true;
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xa9b9c4);
+scene.fog = new THREE.Fog(0xa9b9c4, 40, 160);
+const camera = new THREE.PerspectiveCamera(75, innerWidth / innerHeight, 0.05, 400);
+camera.rotation.order = 'YXZ';
+scene.add(new THREE.HemisphereLight(0xdfe8ff, 0x6b5a45, 1.4));
+const sun = new THREE.DirectionalLight(0xfff0d0, 2.4);
+sun.position.set(20, 40, 15); sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+Object.assign(sun.shadow.camera, { left: -40, right: 40, top: 40, bottom: -40, near: 1, far: 120 });
+scene.add(sun);
+
+function canvasTex(w, h, draw, rep) {
+  const c = document.createElement('canvas'); c.width = w; c.height = h; draw(c.getContext('2d'), w, h);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8;
+  if (rep) t.repeat.set(rep[0], rep[1]); return t;
+}
+const speck = (g, w, h, n, a) => { for (let i = 0; i < n; i++) { g.fillStyle = Math.random() < .5 ? `rgba(0,0,0,${Math.random() * a})` : `rgba(255,255,255,${Math.random() * a})`; g.fillRect(Math.random() * w, Math.random() * h, 1 + Math.random() * 2, 1 + Math.random() * 2); } };
+const dirtTex = canvasTex(256, 256, (g, w, h) => { g.fillStyle = '#8a6a48'; g.fillRect(0, 0, w, h); speck(g, w, h, 9000, .3);
+  for (let i = 0; i < 60; i++) { g.fillStyle = `rgba(${Math.random() < .5 ? '60,40,25' : '170,130,90'},.18)`; g.beginPath(); g.ellipse(Math.random() * w, Math.random() * h, 4 + Math.random() * 14, 3 + Math.random() * 8, 0, 0, 6.3); g.fill(); } }, [30, 30]);
+const plankTex = canvasTex(256, 256, (g, w, h) => { g.fillStyle = '#7d5a37'; g.fillRect(0, 0, w, h);
+  for (let y = 0; y < h; y += 32) { g.fillStyle = `rgba(${Math.random() < .5 ? '40,25,10' : '200,150,90'},.18)`; g.fillRect(0, y, w, 32); g.fillStyle = 'rgba(20,10,0,.65)'; g.fillRect(0, y, w, 2); }
+  for (let i = 0; i < 120; i++) { g.strokeStyle = `rgba(40,20,5,${Math.random() * .3})`; g.beginPath(); const y = Math.random() * h; g.moveTo(0, y); g.bezierCurveTo(80, y + 3, 160, y - 3, w, y + 2); g.stroke(); } speck(g, w, h, 3000, .25); }, [4, 1]);
+const bagTex = canvasTex(128, 128, (g, w, h) => { g.fillStyle = '#9c8a64'; g.fillRect(0, 0, w, h); speck(g, w, h, 3500, .3);
+  for (let y = 0; y < h; y += 32) { g.strokeStyle = 'rgba(40,30,15,.55)'; g.lineWidth = 2; g.beginPath(); g.moveTo(0, y); g.lineTo(w, y); g.stroke(); } }, [3, 1]);
+const metalPlateTex = canvasTex(128, 128, (g, w, h) => { g.fillStyle = '#5a6168'; g.fillRect(0, 0, w, h); speck(g, w, h, 3000, .3); g.strokeStyle = '#2a2f33'; g.lineWidth = 6; g.strokeRect(3, 3, w - 6, h - 6); });
+
+const raycastMeshes = [];
+function addMesh(geo, mat, x, y, z, surface, cast = true) {
+  const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = cast; m.receiveShadow = true; m.userData.surface = surface;
+  scene.add(m); raycastMeshes.push(m); return m;
+}
+const floor = addMesh(new THREE.PlaneGeometry(120, 120).rotateX(-Math.PI / 2), new THREE.MeshLambertMaterial({ map: dirtTex }), 0, 0, 0, 'dirt', false);
+// target wall (wood), sandbag stack, steel plates
+addMesh(new THREE.BoxGeometry(12, 3.2, 0.4), new THREE.MeshLambertMaterial({ map: plankTex }), 0, 1.6, -25, 'wood');
+for (let r = 0; r < 3; r++) for (let i = 0; i < 6 - r; i++)
+  addMesh(new THREE.BoxGeometry(1.0, 0.4, 0.55), new THREE.MeshLambertMaterial({ map: bagTex }), -9 + i * 1.02 + r * 0.5, 0.2 + r * 0.4, -12, 'sandbag');
+for (let i = 0; i < 4; i++) {
+  addMesh(new THREE.BoxGeometry(0.9, 1.2, 0.06), new THREE.MeshLambertMaterial({ map: metalPlateTex }), -6 + i * 4, 1.5, -32 - i * 6, 'metal');
+  addMesh(new THREE.BoxGeometry(0.08, 0.9, 0.08), new THREE.MeshLambertMaterial({ color: 0x3a3226 }), -6 + i * 4, 0.45, -32 - i * 6, 'wood');
+}
+// distance posts every 10 m
+for (let d = 10; d <= 50; d += 10) addMesh(new THREE.BoxGeometry(0.1, 1.4, 0.1), new THREE.MeshLambertMaterial({ color: 0xd8c070 }), 3, 0.7, -d, 'wood');
+
+// ---------- weapon ----------
+const weapon = G.Weapon.create(scene);
+
+// ---------- input ----------
+const keys = {}; let lmb = false, rmb = false, locked = false, yaw = 0, pitch = 0;
+addEventListener('keydown', e => { keys[e.code] = true; });
+addEventListener('keyup', e => { keys[e.code] = false; });
+canvas.addEventListener('mousedown', e => {
+  G.Audio.unlock();
+  if (!locked) { canvas.requestPointerLock(); return; }
+  if (e.button === 0) lmb = true; if (e.button === 2) rmb = true;
+});
+addEventListener('mouseup', e => { if (e.button === 0) lmb = false; if (e.button === 2) rmb = false; });
+addEventListener('contextmenu', e => e.preventDefault());
+document.addEventListener('pointerlockchange', () => { locked = document.pointerLockElement === canvas; if (!locked) { lmb = rmb = false; } document.getElementById('help').style.display = locked ? 'none' : 'block'; });
+addEventListener('mousemove', e => {
+  if (!locked) return;
+  const k = 0.0022 * (1 - 0.45 * weapon.adsAmount());
+  yaw -= e.movementX * k; pitch = Math.max(-1.45, Math.min(1.45, pitch - e.movementY * k));
+});
+addEventListener('resize', () => { renderer.setSize(innerWidth, innerHeight); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); });
+renderer.setSize(innerWidth, innerHeight);
+
+// ---------- sound panel ----------
+const btns = document.getElementById('btns');
+const posChk = document.getElementById('pos'), distR = document.getElementById('dist');
+distR.oninput = () => { document.getElementById('dv').textContent = distR.value; };
+for (const n of G.Audio.names) {
+  if (n === 'wind') continue;
+  const b = document.createElement('button'); b.textContent = n;
+  b.onclick = () => {
+    G.Audio.unlock(); camera.updateMatrixWorld(); G.Audio.updateListener(camera);
+    let opt = {};
+    if (posChk.checked || n === 'enemy_shot') {
+      const f = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion), l = new THREE.Vector3(-1, 0, 0).applyQuaternion(camera.quaternion);
+      opt.position = camera.position.clone().addScaledVector(f.multiplyScalar(0.8).add(l.multiplyScalar(0.6)).normalize(), +distR.value);
+    }
+    G.Audio.play(n, opt);
+  };
+  btns.appendChild(b);
+}
+document.getElementById('wind').onchange = e => { G.Audio.unlock(); G.Audio.loop('wind', e.target.checked); };
+
+// ---------- loop ----------
+const ray = new THREE.Raycaster(), nrm = new THREE.Vector3();
+const shotTimes = []; let totalShots = 0, stepT = 0, last = performance.now(), fpsAcc = 0, fpsN = 0, fps = 0;
+camera.position.set(0, 1.6, 6);
+
+function frame(now) {
+  requestAnimationFrame(frame);
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  fpsAcc += dt; fpsN++; if (fpsAcc > 0.5) { fps = fpsN / fpsAcc; fpsAcc = 0; fpsN = 0; }
+
+  // movement
+  const fw = (keys.KeyW ? 1 : 0) - (keys.KeyS ? 1 : 0), st = (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0);
+  const moving = locked && (fw !== 0 || st !== 0);
+  const sprinting = moving && keys.ShiftLeft && fw > 0 && !rmb;
+  const sp = (sprinting ? 7 : weapon.adsAmount() > 0.5 ? 2 : 4) * dt;
+  if (moving) {
+    const l = Math.hypot(fw, st) || 1, sy = Math.sin(yaw), cy = Math.cos(yaw);
+    camera.position.x += (-sy * fw + cy * st) / l * sp; camera.position.z += (-cy * fw - sy * st) / l * sp;
+    camera.position.x = Math.max(-50, Math.min(50, camera.position.x)); camera.position.z = Math.max(-50, Math.min(50, camera.position.z));
+    stepT += dt * (sprinting ? 2.6 : 1.8); if (stepT >= 1) { stepT = 0; G.Audio.play('footstep', { volume: 0.6 }); }
+  }
+  camera.rotation.set(pitch, yaw, 0);
+  camera.fov = 75 - 12 * weapon.adsAmount(); camera.updateProjectionMatrix();
+  camera.updateMatrixWorld();
+
+  const out = weapon.update(dt, { fire: lmb, ads: rmb, reload: !!keys.KeyR, moving, sprinting, camera, groundY: 0 });
+  pitch = Math.max(-1.45, Math.min(1.45, pitch + out.kick.pitch)); yaw += out.kick.yaw;
+  for (const s of out.shots) {
+    totalShots++; shotTimes.push(now);
+    ray.set(s.origin, s.dir); ray.far = 300;
+    const hit = ray.intersectObjects(raycastMeshes, false)[0];
+    if (hit) {
+      nrm.copy(hit.face.normal).transformDirection(hit.object.matrixWorld);
+      weapon.impact(hit.point, nrm.clone(), hit.object.userData.surface);
+      if (hit.object.userData.surface === 'metal') G.Audio.play('hit_marker');
+    }
+  }
+  G.Audio.updateListener(camera);
+
+  renderer.clear(); renderer.render(scene, camera);
+  renderer.clearDepth(); renderer.render(weapon.viewScene, weapon.viewCamera);
+
+  while (shotTimes.length && now - shotTimes[0] > 1000) shotTimes.shift();
+  const a = weapon.ammo(), info = renderer.info.render, ps = weapon.poolStats();
+  document.getElementById('hud').textContent =
+    `AMMO ${String(a.mag).padStart(2, '0')} / ${a.reserve}${a.reloading ? '   RELOADING' : a.mag === 0 ? '   EMPTY (R)' : ''}\n` +
+    `ADS ${(weapon.adsAmount() * 100) | 0}%   spread ${weapon.spreadDeg().toFixed(2)}°\n` +
+    `rate ${(shotTimes.length * 60) | 0} rpm (last 1 s)   shots ${totalShots}\n` +
+    `fps ${fps.toFixed(0)}   draw calls ${info.calls}   tris ${info.triangles}\n` +
+    `gun tris ${ps.gunTriangles}   particles ${ps.particlesLive}/${ps.particleCap}`;
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

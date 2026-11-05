@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<title>Điện Biên Phủ 1954</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="css/style.css">
+<script type="importmap">{ "imports": { "three": "./vendor/three.module.min.js" } }</script>
+</head>
+<body>
+<canvas id="game"></canvas>
+<div id="ui"></div>
+<noscript>Cần bật JavaScript để chơi.</noscript>
+<script type="module">
+import * as THREE from 'three';
+import { EffectComposer } from './vendor/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from './vendor/addons/postprocessing/RenderPass.js';
+import { ShaderPass } from './vendor/addons/postprocessing/ShaderPass.js';
+import { OutputPass } from './vendor/addons/postprocessing/OutputPass.js';
+window.THREE = THREE;
+window.THREE_ADDONS = { EffectComposer, RenderPass, ShaderPass, OutputPass };
+
+// Game modules are plain scripts on the global G, loaded in this order.
+const MODULES = ['config', 'textures', 'map', 'audio', 'weapon', 'enemies', 'realism', 'main'];
+const V = '?v=1';
+for (const name of MODULES) {
+  await new Promise((ok, fail) => {
+    const s = document.createElement('script');
+    s.src = 'src/' + name + '.js' + V;
+    s.onload = ok;
+    s.onerror = () => fail(new Error('Không tải được src/' + name + '.js'));
+    document.body.appendChild(s);
+  });
+}
+</script>
+</body>
+</html>

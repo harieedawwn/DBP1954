@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<title>Kiểm thử kẻ địch — Điện Biên Phủ 1954</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #1b1d14; font-family: Impact, "Arial Narrow", Georgia, sans-serif; }
+  canvas { display: block; }
+  #ui { position: fixed; left: 12px; top: 12px; background: rgba(40, 46, 26, .82); border: 2px solid #8a8a54; border-right-color: #2a2d18; border-bottom-color: #2a2d18; padding: 10px 12px; color: #d8c88a; text-shadow: 1px 1px 0 #000; letter-spacing: .5px; }
+  #ui button { display: block; width: 100%; margin: 6px 0 0; padding: 6px 12px; font: inherit; color: #e6d89c; background: #4a5030; border: 2px solid #9a9a60; border-right-color: #23261a; border-bottom-color: #23261a; cursor: pointer; text-shadow: 1px 1px 0 #000; }
+  #ui button:active { border-color: #23261a; border-right-color: #9a9a60; border-bottom-color: #9a9a60; }
+  #info { margin-top: 8px; font-size: 13px; line-height: 1.5; white-space: pre; }
+</style>
+</head>
+<body>
+<div id="ui">
+  <div>KIỂM THỬ KẺ ĐỊCH</div>
+  <button id="bAlert">Báo động</button>
+  <button id="bKill">Hạ một tên</button>
+  <button id="bReset">Làm lại</button>
+  <div id="info"></div>
+</div>
+<script type="module">
+import * as THREE from '../vendor/three.module.min.js';
+window.THREE = THREE;
+window.G = window.G || {};
+// minimal audio stub: the real G.Audio belongs to another module
+G.Audio = G.Audio || { play(name) { stats.sounds[name] = (stats.sounds[name] || 0) + 1; } };
+const stats = { hits: 0, sounds: {} };
+
+await new Promise((res, rej) => {
+  const s = document.createElement('script');
+  s.src = '../src/enemies.js'; s.onload = res; s.onerror = () => rej(new Error('Không tải được ../src/enemies.js'));
+  document.head.appendChild(s);
+});
+
+/* ---- scene ---- */
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x9fb0a0);
+scene.fog = new THREE.Fog(0x9fb0a0, 40, 120);
+const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, .1, 300);
+scene.add(new THREE.HemisphereLight(0xdfe8d0, 0x4a4030, .9));
+const sun = new THREE.DirectionalLight(0xfff0d0, 1.3);
+sun.position.set(14, 24, 10); sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+Object.assign(sun.shadow.camera, { left: -30, right: 30, top: 30, bottom: -30, near: 1, far: 80 });
+scene.add(sun);
+
+function canvasTex(w, h, paint, rep) {
+  const c = document.createElement('canvas'); c.width = w; c.height = h; paint(c.getContext('2d'), w, h);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 4;
+  if (rep) t.repeat.set(rep, rep); return t;
+}
+const rnd = (() => { let s = 12345; return () => (s = (s * 16807) % 2147483647) / 2147483647; })();
+const dirt = canvasTex(512, 512, (g, w, h) => {
+  g.fillStyle = '#7a5a3a'; g.fillRect(0, 0, w, h);
+  for (let i = 0; i < 9000; i++) { g.fillStyle = `rgba(${rnd() < .5 ? '40,25,10' : '200,160,110'},${.05 + rnd() * .12})`; g.fillRect(rnd() * w, rnd() * h, 1 + rnd() * 4, 1 + rnd() * 4); }
+  for (let i = 0; i < 40; i++) { const x = rnd() * w, y = rnd() * h, r = 8 + rnd() * 30, gr = g.createRadialGradient(x, y, 0, x, y, r); gr.addColorStop(0, 'rgba(60,40,20,.35)'); gr.addColorStop(1, 'rgba(60,40,20,0)'); g.fillStyle = gr; g.fillRect(x - r, y - r, r * 2, r * 2); }
+}, 14);
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(120, 120), new THREE.MeshLambertMaterial({ map: dirt }));
+ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
+const bagTex = canvasTex(256, 128, (g, w, h) => {
+  g.fillStyle = '#9a8c62'; g.fillRect(0, 0, w, h);
+  for (let r = 0; r < 4; r++) for (let c = 0; c < 4; c++) {
+    const x = c * 64 + (r % 2) * 32 - 16, y = r * 32;
+    g.fillStyle = `rgb(${130 + rnd() * 30 | 0},${118 + rnd() * 25 | 0},${80 + rnd() * 20 | 0})`; g.fillRect(x + 2, y + 2, 60, 28);
+    g.strokeStyle = 'rgba(40,30,15,.7)'; g.lineWidth = 2; g.strokeRect(x + 2, y + 2, 60, 28);
+  }
+  for (let i = 0; i < 2500; i++) { g.fillStyle = `rgba(0,0,0,${rnd() * .15})`; g.fillRect(rnd() * w, rnd() * h, 2, 2); }
+});
+const colliders = [];
+function sandbag(x, z, w, d, h) {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshLambertMaterial({ map: bagTex }));
+  m.position.set(x, h / 2, z); m.castShadow = m.receiveShadow = true; scene.add(m); m.updateMatrixWorld(true);
+  colliders.push(new THREE.Box3().setFromObject(m));
+}
+sandbag(-5, 1, 7, 1.2, 1.1); sandbag(6, -1.5, 6, 1.2, 1.1); sandbag(0, -13, 5, 1.2, 1.1); sandbag(-10, -8, 1.2, 6, 1.1);
+
+/* ---- map stub + enemies ---- */
+const map = {
+  colliders, raycastMeshes: [], groundHeightAt: () => 0,
+  enemySpawns: [
+    { pos: new THREE.Vector3(-5, 0, -2.2), yaw: 0, kind: 'smg', tier: 1 },
+    { pos: new THREE.Vector3(6, 0, -4.5), yaw: 0, kind: 'rifle', tier: 2 },
+    { pos: new THREE.Vector3(0, 0, -9), yaw: 0, kind: 'rifle', tier: 3 },
+    { pos: new THREE.Vector3(2.5, 0, -6.5), yaw: 0, kind: 'smg', tier: 1 }
+  ]
+};
+const diff = { enemyCount: 4, enemyAccuracy: .5, reactionTime: .6, enemyDamage: 10, playerHealth: 100 };
+const player = { pos: new THREE.Vector3(0, 1.6, 22), alive: true, damage() { stats.hits++; } };
+const en = G.Enemies.create(scene, map, diff);
+en.spawnAll();
+
+document.getElementById('bAlert').onclick = () => en.alertAt(player.pos, 200);
+document.getElementById('bKill').onclick = () => {
+  const e = en.list().find(x => !x.dead);
+  if (e) en.damage(e, 100, 'body', new THREE.Vector3(0, 0, -1));
+};
+document.getElementById('bReset').onclick = () => { stats.hits = 0; en.spawnAll(); };
+
+/* ---- loop: camera orbits the yard ---- */
+const names = ['nghỉ', 'cảnh giác', 'giao chiến', 'chết'];
+const info = document.getElementById('info');
+const clock = new THREE.Clock(); let ang = .4, frames = 0, acc = 0;
+renderer.setAnimationLoop(() => {
+  const dt = Math.min(clock.getDelta(), .05);
+  ang += dt * .18;
+  camera.position.set(Math.sin(ang) * 17, 6.5, -4 + Math.cos(ang) * 17);
+  camera.lookAt(0, 1.1, -4);
+  en.update(dt, player);
+  renderer.render(scene, camera);
+  acc += dt; frames++;
+  if (acc > .3) {
+    info.textContent = 'Còn sống: ' + en.aliveCount() + ' / ' + en.totalCount() + '\nTrúng người chơi: ' + stats.hits + '\nTiếng súng địch: ' + (stats.sounds.enemy_shot || 0) +
+      '\n' + en.list().map((e, i) => (i + 1) + '. ' + e.kind + ' T' + e.tier + ' — ' + names[e.state]).join('\n') + '\nDraw calls: ' + renderer.info.render.calls;
+    acc = 0;
+  }
+});
+addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
+</script>
+</body>
+</html>
